@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: task-service
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+  - name: internal
+paths:                           # эндпоинты
+  /api/v1/tasks:
+    get:
+      tags: [public]
+      summary: Получить список задач
+      responses:
+        '200':
+          description: Список задач
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Task'}
+    post:
+      tags: [public]
+      summary: Создать задачу
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTaskRequest' }
+            example:
+              taskName: "Помыть полы"
+              taskDescription: "Помыть полы надо жеско седня"
+              contractor: null # obj
+              deadline: "2026-12-12"
+              priority: 1
+      responses:
+        '201':
+          description: Задача создана
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+  /api/v1/tasks/{taskId}:
+    get:
+      tags: [public]
+      summary: Получить задачу
+      responses:
+        '200':
+          description: Задача
+          content:
+            application/json:
+              schema:
+                { $ref: '#/components/schemas/Task'}
+        '404': { $ref: '#/components/responses/NotFound'}
+
+
+    patch:
+      tags: [public]
+      summary: Изменить задачу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTaskRequest' }
+      responses:
+        '200':
+          description: Задача изменена
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest'}
+        '404': { $ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [public]
+      summary: Удалить задачу
+      responses:
+        '204':
+          description: Задача удалена
+        '404': { $ref: '#/components/responses/NotFound'}
+components:                      # всё что повторяется
+  responses:
+    NotFound:
+      description: Пользователь не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    BadRequest:
+      description: Ошибка запроса
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    CreateTaskRequest:
+      type: object
+      required: [taskName]
+      properties:
+        taskName: {type: string}
+        taskDescription: {type: string}
+        contractor: {type: string, format: uuid, nullable: true}
+        deadline: {type: string, format: date}
+        priority: {type: integer, minimum: 1, maximum: 3}
+    Task:
+      type: object
+      required: [name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        contractor: {type: string, format: uuid}
+        deadline: {type: string, format: date}
+        priority: {type: integer, minimum: 1, maximum: 3}
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }

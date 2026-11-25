@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: family-service
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+  - name: internal
+paths:                           # эндпоинты
+  /api/v1/invitations:
+    post:
+      tags: [public]
+      summary: Пригласить в семью
+      description: >
+        Создаёт приглашение и публикует событие member.invited,
+        по которому notification-service отправляет письмо.
+        Приглашать может владелец семьи или взрослый.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInvitationRequest' }
+            example:
+              familyId: "3f2b8c1e-5d4a-4b7e-9a10-6c2d8e4f1a77"
+              email: "nanny@example.com"
+              role: nanny
+      responses:
+        '201':
+          description: Приглашение создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Invitation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/invitations/{invitationId}/acceptance:
+    post:
+      tags: [public]
+      summary: Принять приглашение
+      description: >
+        Текущий пользователь (из токена) становится участником семьи.
+        Публикуется событие member.joined.
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+      responses:
+        '200':
+          description: Приглашение принято, участник добавлен в семью
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+  /internal/v1/families/{familyId}/members/{memberId}:
+    get:
+      tags: [internal]
+      summary: Получить сведения об участнике семьи
+      description: >
+        Вызывается family-service перед выполнением действия участником семьи.
+        Возвращает только то, что нужно для решения о выдаче.
+      parameters:
+        - $ref: '#/components/parameters/FamilyId'
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        '200':
+          description: Пользователь найден
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberInfo' }
+        '404': { $ref: '#/components/responses/NotFound'}
+
+components:                      # всё что повторяется
+  responses:
+    NotFound:
+      description: Пользователь не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    MemberInfo:
+      type: object
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }

@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: pet-service
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+  - name: internal
+paths:                           # эндпоинты
+  /internal/v1/pets/{petId}:
+    get:
+      tags: [internal]
+      summary: Получить сведения о питомце
+      description: >
+        Вызывается pet-service для проверки существования питомца.
+        Возвращает всю информацию о питомце, либо сообщение о том, что такого питомца нет.
+      parameters:
+        - $ref: '#/components/parameters/PetId' 
+      responses:
+        '200':
+          description: Питомец найден
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PetInfo' }
+        '404': { $ref: '#/components/responses/NotFound'}
+  /api/v1/pets:
+    post:
+      tags: [public]
+      summary: Создать питомца
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+          schema: { $ref: '/#/components/schemas/CreatePetRequest'}
+      responses:
+        '201':
+          description: Питомец создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pet' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  
+components:                      # всё что повторяется
+  schemas:
+    Pet:
+      type: object
+      required: [id, name, age]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        age: {type: integer}
+    PetInfo:
+      required: [id]
+      properties:
+        id: {type: string, format: uuid}
+    CreatePetRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        age:  { type: integer }
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type:   { type: string }
+        title:  { type: string }
+        status: { type: integer }
+        detail: { type: string }
+  
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Питомец не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Конфликт
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  parameters:
+    IdempotencyKey:
+      name: IdempotencyKey
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+
+

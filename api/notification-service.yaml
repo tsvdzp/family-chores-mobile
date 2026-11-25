@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: notification-service
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+    description: Эндпоинты для клиента (через Gateway)
+
+paths:
+  /api/v1/notification-settings:
+    get:
+      tags: [public]
+      summary: Получить настройки уведомлений
+      description: >
+        Возвращает настройки текущего пользователя (определяется по токену).
+        Если пользователь их ещё не менял, возвращаются значения по умолчанию.
+      responses:
+        '200':
+          description: Настройки уведомлений
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [public]
+      summary: Изменить настройки уведомлений
+      description: >
+        Меняет только переданные поля, остальные остаются как были.
+        Повторный запрос с теми же значениями даёт тот же результат,
+        поэтому Idempotency-Key не требуется.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNotificationSettingsRequest' }
+            example:
+              pushEnabled: true
+              emailEnabled: false
+              quietHoursStart: "22:00"
+              quietHoursEnd: "08:00"
+      responses:
+        '200':
+          description: Настройки изменены, возвращено их новое состояние
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationSettings' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не передан или недействителен токен
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    NotificationSettings:
+      type: object
+      required: [pushEnabled, emailEnabled, notifyTasks, notifyPets]
+      properties:
+        pushEnabled:
+          type: boolean
+          description: Получать push-уведомления
+        emailEnabled:
+          type: boolean
+          description: Получать уведомления по почте
+        notifyTasks:
+          type: boolean
+          description: Уведомления о задачах (новая задача, приближение срока)
+        notifyPets:
+          type: boolean
+          description: Напоминания о питомцах (прививки, визиты к врачу)
+        quietHoursStart:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Начало периода тишины (чч:мм), null если период не задан
+        quietHoursEnd:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Конец периода тишины (чч:мм), null если период не задан
+    UpdateNotificationSettingsRequest:
+      type: object
+      minProperties: 1
+      properties:
+        pushEnabled:     { type: boolean }
+        emailEnabled:    { type: boolean }
+        notifyTasks:     { type: boolean }
+        notifyPets:      { type: boolean }
+        quietHoursStart:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+        quietHoursEnd:
+          type: string
+          nullable: true
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type:   { type: string }
+        title:  { type: string }
+        status: { type: integer }
+        detail: { type: string }

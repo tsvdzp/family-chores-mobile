@@ -1,0 +1,143 @@
+openapi: 3.0.3
+info:
+  title: sync-service
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: public
+
+paths:
+  /api/v1/sync/ws:
+    get:
+      tags: [public]
+      summary: Открыть канал получения изменений
+      description: >
+        Запрос на переключение протокола на WebSocket
+        При подключении сервис проверяет у family-service, что участник
+        состоит в семье. После ответа 101 сервер присылает по соединению
+        изменения семьи в реальном времени.
+      parameters:
+        - $ref: '#/components/parameters/FamilyId'
+        - name: access_token
+          in: query
+          required: false
+          description: >
+            Токен доступа. Браузерный WebSocket не позволяет задать заголовок
+            Authorization, поэтому токен можно передать здесь.
+          schema: { type: string }
+      responses:
+        '101':
+          description: Соединение переключено на WebSocket
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/sync/changes:
+    get:
+      tags: [public]
+      summary: Получить изменения после курсора
+      description: >
+        Используется клиентом после офлайна, чтобы догнать пропущенные изменения.
+        Если указанный курсор уже вышел за пределы буфера событий,
+        возвращается 410, и клиент должен загрузить состояние заново целиком.
+      parameters:
+        - $ref: '#/components/parameters/FamilyId'
+        - name: since
+          in: query
+          required: false
+          description: >
+            Курсор последнего полученного изменения. Если не передан,
+            возвращаются все изменения из буфера.
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Максимальное число изменений в ответе
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Изменения после указанного курсора
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangesPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '410': { $ref: '#/components/responses/Gone' }
+
+components:
+  parameters:
+    FamilyId:
+      name: familyId
+      in: query
+      required: true
+      description: Идентификатор семьи, изменения которой нужны клиенту
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не передан или недействителен токен
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Участник не состоит в этой семье
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Gone:
+      description: Курсор устарел, нужная часть истории уже удалена из буфера
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Change:
+      type: object
+      required: [cursor, eventId, eventType, occurredAt, payload]
+      properties:
+        cursor:
+          type: string
+          description: Курсор этого изменения. Клиент запоминает последний полученный
+        eventId:
+          type: string
+          format: uuid
+          description: Идентификатор события, по нему клиент отбрасывает дубли
+        eventType:
+          type: string
+          description: Тип изменения, например task.created, task.updated, task.deleted
+        occurredAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+          description: Данные изменения, состав зависит от eventType
+    ChangesPage:
+      type: object
+      required: [items, nextCursor, hasMore]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Change' }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Курсор для следующего запроса. Null, если буфер пуст
+        hasMore:
+          type: boolean
+          description: Есть ли ещё изменения после этой порции
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type:   { type: string }
+        title:  { type: string }
+        status: { type: integer }
+        detail: { type: string }
